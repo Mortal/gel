@@ -180,7 +180,6 @@ fn main() {
     zbuff.resize((xres * yres) as usize, 0f32);
     sdl.mouse().set_relative_mouse_mode(false);
     for (xt, yt) in mouse_iter(&mut sdl.event_pump().unwrap()) {
-        let difsize = dif.size();
         texture.with_lock(None, |pixel, _pitch| {
             dif.with_lock(|difpixels| {
                 let mut target = ZBufferedTarget {
@@ -200,8 +199,8 @@ fn main() {
                     let vew = per.viewport(xres, yres);
                     let shader = TextureShader {
                         difpixels: difpixels,
-                        difwidth: difsize.0,
-                        difheight: difsize.1,
+                        difwidth: dif.width(),
+                        difheight: dif.height(),
                     };
                     draw(&mut target, &vew, &nrm, &tex, &shader);
                 }
