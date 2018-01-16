@@ -83,11 +83,12 @@ impl Obj {
                 let (_, x, y) = scan!(line, ' ', String, f32, f32).expect(&line);
                 let v = Vertex { x: x, y: y, z: 0f32 };
                 vst.push(v);
-            } else {
-                assert!(line.starts_with("v "));
+            } else if line.starts_with("v ") {
                 let (_, x, y, z) = scan!(line, ' ', String, f32, f32, f32).expect(&line);
                 let v = Vertex { x: x, y: y, z: z };
                 vsv.push(v);
+            } else {
+                return Err(Error::Scan(format!("Unexpected line {:?}", line)));
             }
         }
         Ok(Obj {
