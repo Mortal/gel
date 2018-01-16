@@ -71,7 +71,7 @@ fn main() {
             "salesman".to_owned()
         }
     };
-    let obj = Obj::load(format!("model/{}.obj", model));
+    let obj = Obj::load(format!("model/{}.obj", model)).unwrap();
     let dif = Surface::load_bmp(format!("model/{}.bmp", model)).unwrap();
     let dif = dif.convert(&make_pixel_format(PixelFormatEnum::RGB888)).unwrap();
     assert_eq!(dif.pitch(), 4*dif.width());

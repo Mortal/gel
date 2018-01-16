@@ -1,7 +1,22 @@
-use std::io::{BufRead, BufReader};
+use std::io::{self, BufRead, BufReader};
+use std::result;
 use std::fs::File;
 use std::path::Path;
 use geom::*;
+
+#[derive(Debug)]
+pub enum Error {
+    Io(io::Error),
+    Scan(String),
+}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Error {
+        Error::Io(e)
+    }
+}
+
+pub type Result<T> = result::Result<T, Error>;
 
 pub struct Obj {
     pub vsv: Vec<Vertex>,
@@ -14,31 +29,37 @@ pub struct Obj {
 macro_rules! scan {
     ( $string:expr, $sep:expr, $( $x:ty ),+ ) => {(|| {
         let mut iter = $string.split($sep);
-        let r = ($(match iter.next() { Some(v) => v.parse::<$x>().unwrap(), None => return None },)*);
+        let r = ($(match iter.next() {
+            Some(v) => match v.parse::<$x>() {
+                Ok(v) => v,
+                Err(e) => return Err(Error::Scan(format!("parse error {:?}", e))),
+            },
+            None => return Err(Error::Scan("unexpected end-of-string".to_owned())),
+        },)*);
         match iter.next() {
-            Some(s) => panic!("scan!() got unexpected token {}", s),
+            Some(s) => return Err(Error::Scan(format!("unexpected token {}", s))),
             None => (),
         };
-        Some(r)
+        Ok(r)
     })()}
 }
 
 impl Obj {
-    pub fn load<P: AsRef<Path>>(path: P) -> Self {
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let mut vsv = Vec::new();
         let mut vsn = Vec::new();
         let mut vst = Vec::new();
         let mut fs = Vec::new();
-        for line in BufReader::new(File::open(path).unwrap()).lines() {
-            let line = line.unwrap();
+        for line in BufReader::new(File::open(path)?).lines() {
+            let line = line?;
             if line.len() == 0 || line.starts_with("#") {
                 continue;
             }
             if line.starts_with("f ") {
                 let (_, sx, sy, sz) = scan!(line, ' ', String, String, String, String).expect(&line);
-                let (va, ta, na) = scan!(sx, '/', usize, usize, usize).unwrap();
-                let (vb, tb, nb) = scan!(sy, '/', usize, usize, usize).unwrap();
-                let (vc, tc, nc) = scan!(sz, '/', usize, usize, usize).unwrap();
+                let (va, ta, na) = scan!(sx, '/', usize, usize, usize)?;
+                let (vb, tb, nb) = scan!(sy, '/', usize, usize, usize)?;
+                let (vc, tc, nc) = scan!(sz, '/', usize, usize, usize)?;
                 fs.push(Face {
                     va: va-1, vb: vb-1, vc: vc-1,
                     ta: ta-1, tb: tb-1, tc: tc-1,
@@ -59,12 +80,12 @@ impl Obj {
                 vsv.push(v);
             }
         }
-        Obj {
+        Ok(Obj {
             vsv: vsv,
             vsn: vsn,
             vst: vst,
             fs: fs,
-        }
+        })
     }
 
     pub fn tvgen(&self) -> Vec<Triangle> {
