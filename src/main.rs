@@ -40,6 +40,11 @@ impl<'a> ZBufferedTarget<'a> {
             self.pixel[output + 2] = r;
         }
     }
+
+    fn reset(&mut self) {
+        for v in self.pixel.iter_mut() { *v = 0; }
+        for v in self.zbuff.iter_mut() { *v = f32::MIN; }
+    }
 }
 
 fn draw(target: &mut ZBufferedTarget, vew: &Triangle, nrm: &Triangle, tex: &Triangle, difpixels: &[u8], difsize: (u32, u32)) {
@@ -165,8 +170,12 @@ fn main() {
         let difsize = dif.size();
         texture.with_lock(None, |pixel, _pitch| {
             dif.with_lock(|difpixels| {
-                for v in pixel.iter_mut() { *v = 0; }
-                for v in zbuff.iter_mut() { *v = f32::MIN; }
+                let mut target = ZBufferedTarget {
+                    yres: yres,
+                    pixel: pixel,
+                    zbuff: &mut zbuff,
+                };
+                target.reset();
                 let eye = Vertex { x: xt.sin(), y: yt.sin(), z: xt.cos() };
                 let z = (eye.clone() - Vertex::center()).unit();
                 let x = (Vertex::upward().cross(z.clone())).unit();
@@ -176,11 +185,6 @@ fn main() {
                     let tri = tri.clone().view_triangle(&x, &y, &z, &eye);
                     let per = tri.perspective();
                     let vew = per.viewport(xres, yres);
-                    let mut target = ZBufferedTarget {
-                        yres: yres,
-                        pixel: pixel,
-                        zbuff: &mut zbuff,
-                    };
                     draw(&mut target, &vew, &nrm, &tex, difpixels, difsize);
                 }
             });
