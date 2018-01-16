@@ -47,12 +47,31 @@ impl<'a> ZBufferedTarget<'a> {
     }
 }
 
-fn draw(target: &mut ZBufferedTarget, vew: &Triangle, nrm: &Triangle, tex: &Triangle, difpixels: &[u8], difsize: (u32, u32)) {
+struct TextureShader<'a> {
+    difpixels: &'a [u8],
+    difwidth: u32,
+    difheight: u32,
+}
+
+impl<'a> TextureShader<'a> {
+    fn shade(&self, x: f32, y: f32, intensity: f32) -> (u8, u8, u8) {
+        let xx = ((self.difwidth - 1) as f32 * x) as usize;
+        let yy = ((self.difheight - 1) as f32 * y) as usize;
+        let shading = (255.0 * intensity.max(0.0)) as u8;
+        // Image is upwards contrary to sideways renderer.
+        let offs = (xx + yy * self.difwidth as usize) * 4;
+        let b = self.difpixels[offs];
+        let g = self.difpixels[offs+1];
+        let r = self.difpixels[offs+2];
+        pshade(r, g, b, shading)
+    }
+}
+
+fn draw(target: &mut ZBufferedTarget, vew: &Triangle, nrm: &Triangle, tex: &Triangle, shader: &TextureShader) {
     let xmin = vew.a.x.min(vew.b.x).min(vew.c.x) as isize;
     let ymin = vew.a.y.min(vew.b.y).min(vew.c.y) as isize;
     let xmax = vew.a.x.max(vew.b.x).max(vew.c.x) as isize + 1;
     let ymax = vew.a.y.max(vew.b.y).max(vew.c.y) as isize + 1;
-    let (difwidth, difheight) = difsize;
     for x in xmin..xmax {
         for y in ymin..ymax {
             let bc = vew.clone().barycenter(x, y);
@@ -62,16 +81,10 @@ fn draw(target: &mut ZBufferedTarget, vew: &Triangle, nrm: &Triangle, tex: &Tria
                 target.draw(x, y, z, || {
                     let light = Vertex { x: 0.0, y: 0.0, z: 1.0 };
                     let varying = Vertex { x: light.dot(&nrm.b), y: light.dot(&nrm.c), z: light.dot(&nrm.a) };
-                    let xx = ((difwidth - 1) as f32 * (0.0 + (bc.x * tex.b.x + bc.y * tex.c.x + bc.z * tex.a.x))) as usize;
-                    let yy = ((difheight - 1) as f32 * (1.0 - (bc.x * tex.b.y + bc.y * tex.c.y + bc.z * tex.a.y))) as usize;
+                    let xx = 0.0 + (bc.x * tex.b.x + bc.y * tex.c.x + bc.z * tex.a.x);
+                    let yy = 1.0 - (bc.x * tex.b.y + bc.y * tex.c.y + bc.z * tex.a.y);
                     let intensity = bc.dot(&varying);
-                    let shading = (255.0 * intensity.max(0.0)) as u8;
-                    // Image is upwards contrary to sideways renderer.
-                    let offs = (xx + yy * difwidth as usize) * 4;
-                    let b = difpixels[offs];
-                    let g = difpixels[offs+1];
-                    let r = difpixels[offs+2];
-                    pshade(r, g, b, shading)
+                    shader.shade(xx, yy, intensity)
                 });
             }
         }
@@ -185,7 +198,12 @@ fn main() {
                     let tri = tri.clone().view_triangle(&x, &y, &z, &eye);
                     let per = tri.perspective();
                     let vew = per.viewport(xres, yres);
-                    draw(&mut target, &vew, &nrm, &tex, difpixels, difsize);
+                    let shader = TextureShader {
+                        difpixels: difpixels,
+                        difwidth: difsize.0,
+                        difheight: difsize.1,
+                    };
+                    draw(&mut target, &vew, &nrm, &tex, &shader);
                 }
             });
         }).unwrap();
