@@ -355,7 +355,6 @@ fn main() {
         let mouse = pump.relative_mouse_state();
         let dx = mouse.x();
         let dy = mouse.y();
-        println!("x={} y={}", dx, dy);
         xt -= sens * (dx as f32);
         yt += sens * (dy as f32);
         let difsize = dif.size();
