@@ -1,4 +1,5 @@
 extern crate sdl2;
+use std::env;
 use std::f32;
 use std::ops::{Sub, Mul};
 use std::path::Path;
@@ -325,8 +326,21 @@ fn draw(yres: u32, pixel: &mut[u8], zbuff: &mut[f32], vew: &Triangle, nrm: &Tria
 }
 
 fn main() {
-    let obj = Obj::load("model/salesman.obj");
-    let dif = Surface::load_bmp("model/salesman.bmp").unwrap();
+    let model = {
+        let mut args = env::args();
+        let program_name = args.next().unwrap_or("gel".to_owned());
+        if let Some(arg) = args.next() {
+            if arg.starts_with("-") {
+                println!("Usage: {} [model_name]", program_name);
+                return;
+            }
+            arg
+        } else {
+            "salesman".to_owned()
+        }
+    };
+    let obj = Obj::load(format!("model/{}.obj", model));
+    let dif = Surface::load_bmp(format!("model/{}.bmp", model)).unwrap();
     let dif = dif.convert(&make_pixel_format(PixelFormatEnum::RGB888)).unwrap();
     assert_eq!(dif.pitch(), 4*dif.width());
     let vertices = tvgen(&obj);
