@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::{self, BufRead, BufReader};
 use std::result;
 use std::fs::File;
@@ -13,6 +14,15 @@ pub enum Error {
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Error {
         Error::Io(e)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::Io(ref e) => write!(f, "I/O error: {}", e),
+            Error::Scan(ref s) => write!(f, "Parse error: {}", s),
+        }
     }
 }
 

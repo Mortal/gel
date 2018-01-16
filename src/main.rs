@@ -72,9 +72,15 @@ fn main() {
         }
     };
     let obj_filename = format!("model/{}.obj", model);
-    let obj = Obj::load(&obj_filename).expect(&format!("Could not read {}", obj_filename));
+    let obj = match Obj::load(&obj_filename) {
+        Ok(obj) => obj,
+        Err(e) => {println!("Could not read {}: {}", obj_filename, e); return;},
+    };
     let bmp_filename = format!("model/{}.bmp", model);
-    let dif = Surface::load_bmp(&bmp_filename).expect(&format!("Could not read {}", bmp_filename));
+    let dif = match Surface::load_bmp(&bmp_filename) {
+        Ok(bmp) => bmp,
+        Err(e) => {println!("Could not read {}: {}", bmp_filename, e); return;},
+    };
     let dif = dif.convert(&make_pixel_format(PixelFormatEnum::RGB888)).unwrap();
     assert_eq!(dif.pitch(), 4*dif.width());
     let vertices = obj.tvgen();
