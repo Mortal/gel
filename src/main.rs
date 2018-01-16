@@ -5,9 +5,11 @@ mod obj;
 use obj::*;
 use std::env;
 use std::f32;
+use sdl2::EventPump;
 use sdl2::surface::Surface;
 use sdl2::pixels::{PixelFormatEnum, PixelFormat};
 use sdl2::rect::Rect;
+use sdl2::event::{Event, WindowEvent, EventWaitIterator};
 
 fn make_pixel_format(format: PixelFormatEnum) -> PixelFormat {
     Surface::new(1, 1, format).unwrap().pixel_format()
@@ -57,6 +59,51 @@ fn draw(yres: u32, pixel: &mut[u8], zbuff: &mut[f32], vew: &Triangle, nrm: &Tria
     }
 }
 
+struct MouseIterator<'a> {
+    inner: EventWaitIterator<'a>,
+    x: f32,
+    y: f32,
+    sens: f32,
+}
+
+impl<'a> Iterator for MouseIterator<'a> {
+    type Item = (f32, f32);
+
+    fn next(&mut self) -> Option<(f32, f32)> {
+        loop {
+            let event = match self.inner.next() {
+                None => return None,
+                Some(e) => e,
+            };
+            match event {
+                Event::Quit { timestamp: _ } => return None,
+                Event::Window { timestamp: _, window_id: _, win_event: WindowEvent::Exposed } =>
+                    break,
+                Event::Window { timestamp: _, window_id: _, win_event: WindowEvent::Close } =>
+                    return None,
+                Event::MouseMotion {
+                    timestamp: _, window_id: _, which: _, mousestate: _, x: _, y: _, xrel, yrel,
+                } => {
+                    self.x -= self.sens * xrel as f32;
+                    self.y += self.sens * yrel as f32;
+                    break;
+                },
+                _ => (),
+            };
+        }
+        Some((self.x, self.y))
+    }
+}
+
+fn mouse_iter(pump: &mut EventPump) -> MouseIterator {
+    MouseIterator {
+        inner: pump.wait_iter(),
+        x: 0.0,
+        y: 0.0,
+        sens: 0.005,
+    }
+}
+
 fn main() {
     let model = {
         let mut args = env::args();
@@ -100,17 +147,7 @@ fn main() {
     let mut zbuff = Vec::new();
     zbuff.resize((xres * yres) as usize, 0f32);
     sdl.mouse().set_relative_mouse_mode(false);
-    let mut pump = sdl.event_pump().unwrap();
-    let mut xt = 0f32;
-    let mut yt = 0f32;
-    let sens = 0.005f32;
-    loop {
-        pump.wait_event();
-        let mouse = pump.relative_mouse_state();
-        let dx = mouse.x();
-        let dy = mouse.y();
-        xt -= sens * (dx as f32);
-        yt += sens * (dy as f32);
+    for (xt, yt) in mouse_iter(&mut sdl.event_pump().unwrap()) {
         let difsize = dif.size();
         texture.with_lock(None, |pixel, _pitch| {
             dif.with_lock(|difpixels| {
