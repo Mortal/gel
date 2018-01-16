@@ -183,6 +183,11 @@ fn main() {
                     pixel: pixel,
                     zbuff: &mut zbuff,
                 };
+                let shader = TextureShader {
+                    pixels: difpixels,
+                    width: dif.width(),
+                    height: dif.height(),
+                };
                 target.reset();
                 let eye = Vertex { x: xt.sin(), y: yt.sin(), z: xt.cos() };
                 let z = (eye.clone() - Vertex::center()).unit();
@@ -193,11 +198,6 @@ fn main() {
                     let tri = tri.clone().view_triangle(&x, &y, &z, &eye);
                     let per = tri.perspective();
                     let vew = per.viewport(xres, yres);
-                    let shader = TextureShader {
-                        pixels: difpixels,
-                        width: dif.width(),
-                        height: dif.height(),
-                    };
                     draw(&mut target, &vew, &nrm, &tex, &shader);
                 }
             });
