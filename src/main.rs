@@ -10,6 +10,7 @@ use sdl2::surface::Surface;
 use sdl2::pixels::{PixelFormatEnum, PixelFormat};
 use sdl2::rect::Rect;
 use sdl2::event::{Event, WindowEvent, EventWaitIterator};
+use std::time::Instant;
 
 fn make_pixel_format(format: PixelFormatEnum) -> PixelFormat {
     Surface::new(1, 1, format).unwrap().pixel_format()
@@ -176,6 +177,7 @@ fn main() {
     zbuff.resize((xres * yres) as usize, 0f32);
     sdl.mouse().set_relative_mouse_mode(false);
     for (xt, yt) in mouse_iter(&mut sdl.event_pump().unwrap()) {
+        let t1 = Instant::now();
         texture.with_lock(None, |pixel, _pitch| {
             dif.with_lock(|difpixels| {
                 let mut target = ZBufferedTarget {
@@ -202,6 +204,9 @@ fn main() {
                 }
             });
         }).unwrap();
+        let t2 = Instant::now();
+        let d = t2.duration_since(t1);
+        println!("{}", d.as_secs() as f64 + d.subsec_nanos() as f64 * 1e-9);
         let dst = Rect::new((xres as i32 - yres as i32) / 2,
                             (yres as i32 - xres as i32) / 2,
                             yres, xres);
