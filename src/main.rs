@@ -3,8 +3,10 @@ mod geom;
 use geom::*;
 mod obj;
 use obj::*;
+mod asciidigits;
 use std::env;
 use std::f32;
+use std::time::{Instant, Duration};
 use sdl2::EventPump;
 use sdl2::surface::Surface;
 use sdl2::pixels::{PixelFormatEnum, PixelFormat};
@@ -38,6 +40,10 @@ impl<'a> ZBufferedTarget<'a> {
         for v in self.pixel.iter_mut() { *v = 0; }
         for v in self.zbuff.iter_mut() { *v = f32::MIN; }
     }
+
+    fn xres(&self) -> usize {
+        self.zbuff.len() / self.yres as usize
+    }
 }
 
 struct TextureShader<'a> {
@@ -64,10 +70,13 @@ impl<'a> TextureShader<'a> {
 }
 
 fn draw(target: &mut ZBufferedTarget, vew: &Triangle, nrm: &Triangle, tex: &Triangle, shader: &TextureShader) {
-    let xmin = vew.a.x.min(vew.b.x).min(vew.c.x) as isize;
-    let ymin = vew.a.y.min(vew.b.y).min(vew.c.y) as isize;
-    let xmax = vew.a.x.max(vew.b.x).max(vew.c.x) as isize + 1;
-    let ymax = vew.a.y.max(vew.b.y).max(vew.c.y) as isize + 1;
+    let xmin = vew.a.x.min(vew.b.x).min(vew.c.x).max(0.0) as isize;
+    let ymin = vew.a.y.min(vew.b.y).min(vew.c.y).max(0.0) as isize;
+    let xmax = (vew.a.x.max(vew.b.x).max(vew.c.x) as isize + 1).min(target.xres() as isize);
+    let ymax = (vew.a.y.max(vew.b.y).max(vew.c.y) as isize + 1).min(target.yres as isize);
+    if xmin >= xmax || ymin >= ymax {
+        return;
+    }
     for x in xmin..xmax {
         for y in ymin..ymax {
             let bc = vew.clone().barycenter(x, y);
@@ -132,6 +141,33 @@ fn mouse_iter(pump: &mut EventPump) -> MouseIterator {
     }
 }
 
+struct SumWindow {
+    history: Vec<Duration>,
+    idx: usize,
+    sum: Duration,
+}
+
+impl SumWindow {
+    fn new(window_size: usize) -> Self {
+        let mut history = Vec::new();
+        history.resize(window_size, Duration::new(0, 0));
+        SumWindow {
+            history: history,
+            idx: 0,
+            sum: Duration::new(0, 0),
+        }
+    }
+
+    fn tick(&mut self, d: Duration) -> f64 {
+        self.sum += d;
+        self.sum -= self.history[self.idx];
+        self.history[self.idx] = d;
+        self.idx = if self.idx + 1 == self.history.len() { 0 } else { self.idx + 1 };
+        let elapsed = self.sum.as_secs() as f64 + self.sum.subsec_nanos() as f64 * 1e-9;
+        self.history.len() as f64 / elapsed
+    }
+}
+
 fn main() {
     let model = {
         let mut args = env::args();
@@ -175,9 +211,11 @@ fn main() {
     let mut zbuff = Vec::new();
     zbuff.resize((xres * yres) as usize, 0f32);
     sdl.mouse().set_relative_mouse_mode(false);
+    let mut times = SumWindow::new(30);
     for (xt, yt) in mouse_iter(&mut sdl.event_pump().unwrap()) {
         texture.with_lock(None, |pixel, _pitch| {
             dif.with_lock(|difpixels| {
+                let t = Instant::now();
                 let mut target = ZBufferedTarget {
                     yres: yres,
                     pixel: pixel,
@@ -189,8 +227,13 @@ fn main() {
                     height: dif.height(),
                 };
                 target.reset();
+                // Mouse rotates:
                 let eye = Vertex { x: xt.sin(), y: yt.sin(), z: xt.cos() };
-                let z = (eye.clone() - Vertex::center()).unit();
+                let eye_dir = &eye;
+                // Mouse translates:
+                //let eye = Vertex { x: xt, y: yt, z: 1.0 };
+                //let eye_dir = Vertex { x: 0.0, y: 0.0, z: 1.0 };
+                let z = (eye_dir.clone() - Vertex::center()).unit();
                 let x = (Vertex::upward().cross(z.clone())).unit();
                 let y = z.clone().cross(x.clone());
                 for ((nrm, tex), tri) in normals.iter().zip(textures.iter()).zip(vertices.iter()) {
@@ -200,7 +243,16 @@ fn main() {
                     let vew = per.viewport(xres, yres);
                     draw(&mut target, &vew, &nrm, &tex, &shader);
                 }
-            });
+                let fps = times.tick(t.elapsed());
+                for (i, d) in format!("{}", fps as usize).chars().enumerate() {
+                    asciidigits::draw(d as usize - '0' as usize, |y, x| {
+                        let o = (x+i*6)*yres as usize + (yres as usize - 1 - y);
+                        target.pixel[4*o] = 255;
+                        target.pixel[4*o+1] = 255;
+                        target.pixel[4*o+2] = 255;
+                    });
+                }
+            })
         }).unwrap();
         let dst = Rect::new((xres as i32 - yres as i32) / 2,
                             (yres as i32 - xres as i32) / 2,
