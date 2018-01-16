@@ -3,8 +3,8 @@ mod geom;
 use geom::*;
 mod obj;
 use obj::*;
-use std::env;
-use std::f32;
+use std::{env, f32};
+use std::slice::ChunksMut;
 use sdl2::EventPump;
 use sdl2::surface::Surface;
 use sdl2::pixels::{PixelFormatEnum, PixelFormat};
@@ -20,6 +20,13 @@ struct ZBufferedTarget<'a> {
     yres: u32,
     pixel: &'a mut[u8],
     zbuff: &'a mut[f32],
+}
+
+struct ZBufferedTargetColumns<'a> {
+    x: usize,
+    yres: u32,
+    pixel: ChunksMut<'a, u8>,
+    zbuff: ChunksMut<'a, f32>,
 }
 
 impl<'a> ZBufferedTarget<'a> {
@@ -38,6 +45,29 @@ impl<'a> ZBufferedTarget<'a> {
     fn reset(&mut self) {
         for v in self.pixel.iter_mut() { *v = 0; }
         for v in self.zbuff.iter_mut() { *v = f32::MIN; }
+    }
+
+    fn iter_cols(&mut self, xmin: usize, xmax: usize) -> ZBufferedTargetColumns {
+        ZBufferedTargetColumns {
+            x: xmin,
+            yres: self.yres,
+            pixel: self.pixel[4*xmin*(self.yres as usize)..4*xmax*(self.yres as usize)].chunks_mut(4*self.yres as usize),
+            zbuff: self.zbuff[xmin*(self.yres as usize)..xmax*(self.yres as usize)].chunks_mut(self.yres as usize),
+        }
+    }
+}
+
+impl<'a> Iterator for ZBufferedTargetColumns<'a> {
+    type Item = (usize, ZBufferedTarget<'a>);
+    fn next(&mut self) -> Option<Self::Item> {
+        let pixel = match self.pixel.next() {
+            None => return None,
+            Some(p) => p,
+        };
+        let zbuff = self.zbuff.next().unwrap();
+        let x = self.x;
+        self.x += 1;
+        Some((x, ZBufferedTarget { yres: self.yres, pixel: pixel, zbuff: zbuff }))
     }
 }
 
@@ -65,17 +95,18 @@ impl<'a> TextureShader<'a> {
 }
 
 fn draw(target: &mut ZBufferedTarget, vew: &Triangle, nrm: &Triangle, tex: &Triangle, shader: &TextureShader) {
-    let xmin = vew.a.x.min(vew.b.x).min(vew.c.x) as isize;
+    let xmin = vew.a.x.min(vew.b.x).min(vew.c.x) as usize;
     let ymin = vew.a.y.min(vew.b.y).min(vew.c.y) as isize;
-    let xmax = vew.a.x.max(vew.b.x).max(vew.c.x) as isize + 1;
+    let xmax = vew.a.x.max(vew.b.x).max(vew.c.x) as usize + 1;
     let ymax = vew.a.y.max(vew.b.y).max(vew.c.y) as isize + 1;
-    for x in xmin..xmax {
+    for (x, mut t) in target.iter_cols(xmin, xmax) {
+        let x = x as isize;
         for y in ymin..ymax {
             let bc = vew.clone().barycenter(x, y);
             if bc.x >= 0.0 && bc.y >= 0.0 && bc.z >= 0.0 {
                 // Barycenter above is upwards. Everything below rotated 90 degrees to accomodate sideways renderer.
                 let z = bc.x * vew.b.z + bc.y * vew.c.z + bc.z * vew.a.z;
-                target.draw(x, y, z, || {
+                t.draw(0, y, z, || {
                     let light = Vertex { x: 0.0, y: 0.0, z: 1.0 };
                     let varying = Vertex { x: light.dot(&nrm.b), y: light.dot(&nrm.c), z: light.dot(&nrm.a) };
                     let xx = 0.0 + (bc.x * tex.b.x + bc.y * tex.c.x + bc.z * tex.a.x);
