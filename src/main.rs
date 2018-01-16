@@ -351,7 +351,7 @@ fn main() {
 
     let sdl = sdl2::init().unwrap();
     let video = sdl.video().unwrap();
-    let window = video.window("water", xres, yres).build().unwrap();
+    let window = video.window(&model, xres, yres).build().unwrap();
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     let renderer = canvas.texture_creator();
     // Notice the flip between xres and yres - the renderer is on its side to maximize cache effeciency.
