@@ -48,21 +48,21 @@ impl<'a> ZBufferedTarget<'a> {
 }
 
 struct TextureShader<'a> {
-    difpixels: &'a [u8],
-    difwidth: u32,
-    difheight: u32,
+    pixels: &'a [u8],
+    width: u32,
+    height: u32,
 }
 
 impl<'a> TextureShader<'a> {
     fn shade(&self, x: f32, y: f32, intensity: f32) -> (u8, u8, u8) {
-        let xx = ((self.difwidth - 1) as f32 * x) as usize;
-        let yy = ((self.difheight - 1) as f32 * y) as usize;
+        let xx = ((self.width - 1) as f32 * x) as usize;
+        let yy = ((self.height - 1) as f32 * y) as usize;
         let shading = (255.0 * intensity.max(0.0)) as u8;
         // Image is upwards contrary to sideways renderer.
-        let offs = (xx + yy * self.difwidth as usize) * 4;
-        let b = self.difpixels[offs];
-        let g = self.difpixels[offs+1];
-        let r = self.difpixels[offs+2];
+        let offs = (xx + yy * self.width as usize) * 4;
+        let b = self.pixels[offs];
+        let g = self.pixels[offs+1];
+        let r = self.pixels[offs+2];
         pshade(r, g, b, shading)
     }
 }
@@ -198,9 +198,9 @@ fn main() {
                     let per = tri.perspective();
                     let vew = per.viewport(xres, yres);
                     let shader = TextureShader {
-                        difpixels: difpixels,
-                        difwidth: dif.width(),
-                        difheight: dif.height(),
+                        pixels: difpixels,
+                        width: dif.width(),
+                        height: dif.height(),
                     };
                     draw(&mut target, &vew, &nrm, &tex, &shader);
                 }
