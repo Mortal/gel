@@ -15,13 +15,6 @@ fn make_pixel_format(format: PixelFormatEnum) -> PixelFormat {
     Surface::new(1, 1, format).unwrap().pixel_format()
 }
 
-fn pshade(r: u8, g: u8, b: u8, shading: u8) -> (u8, u8, u8) {
-    let r = (r as usize * shading as usize) / 256;
-    let g = (g as usize * shading as usize) / 256;
-    let b = (b as usize * shading as usize) / 256;
-    (r as u8, g as u8, b as u8)
-}
-
 struct ZBufferedTarget<'a> {
     yres: u32,
     pixel: &'a mut[u8],
@@ -63,7 +56,10 @@ impl<'a> TextureShader<'a> {
         let b = self.pixels[offs];
         let g = self.pixels[offs+1];
         let r = self.pixels[offs+2];
-        pshade(r, g, b, shading)
+        let r = (r as usize * shading as usize) / 256;
+        let g = (g as usize * shading as usize) / 256;
+        let b = (b as usize * shading as usize) / 256;
+        (r as u8, g as u8, b as u8)
     }
 }
 
