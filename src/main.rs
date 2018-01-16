@@ -1,4 +1,5 @@
 extern crate sdl2;
+extern crate rayon;
 mod geom;
 use geom::*;
 mod obj;
@@ -10,6 +11,7 @@ use sdl2::surface::Surface;
 use sdl2::pixels::{PixelFormatEnum, PixelFormat};
 use sdl2::rect::Rect;
 use sdl2::event::{Event, WindowEvent, EventWaitIterator};
+use rayon::prelude::*;
 use std::time::Instant;
 
 fn make_pixel_format(format: PixelFormatEnum) -> PixelFormat {
@@ -99,7 +101,7 @@ fn draw(target: &mut ZBufferedTarget, vew: &Triangle, nrm: &Triangle, tex: &Tria
     let ymin = vew.a.y.min(vew.b.y).min(vew.c.y) as isize;
     let xmax = vew.a.x.max(vew.b.x).max(vew.c.x) as usize + 1;
     let ymax = vew.a.y.max(vew.b.y).max(vew.c.y) as isize + 1;
-    for (x, mut t) in target.iter_cols(xmin, xmax) {
+    target.iter_cols(xmin, xmax).collect::<Vec<_>>().par_iter_mut().for_each(|&mut (x, ref mut t)| {
         let x = x as isize;
         for y in ymin..ymax {
             let bc = vew.clone().barycenter(x, y);
@@ -116,7 +118,7 @@ fn draw(target: &mut ZBufferedTarget, vew: &Triangle, nrm: &Triangle, tex: &Tria
                 });
             }
         }
-    }
+    });
 }
 
 struct MouseIterator<'a> {
