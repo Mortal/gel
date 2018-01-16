@@ -22,7 +22,27 @@ fn pshade(r: u8, g: u8, b: u8, shading: u8) -> (u8, u8, u8) {
     (r as u8, g as u8, b as u8)
 }
 
-fn draw(yres: u32, pixel: &mut[u8], zbuff: &mut[f32], vew: &Triangle, nrm: &Triangle, tex: &Triangle, difpixels: &[u8], difsize: (u32, u32)) {
+struct ZBufferedTarget<'a> {
+    yres: u32,
+    pixel: &'a mut[u8],
+    zbuff: &'a mut[f32],
+}
+
+impl<'a> ZBufferedTarget<'a> {
+    fn draw<F: FnOnce() -> (u8, u8, u8)>(&mut self, x: isize, y: isize, z: f32, f: F) {
+        let idx = y as usize + x as usize * self.yres as usize;
+        if self.zbuff[idx] < z {
+            self.zbuff[idx] = z;
+            let (r, g, b) = f();
+            let output = idx * 4;
+            self.pixel[output] = b;
+            self.pixel[output + 1] = g;
+            self.pixel[output + 2] = r;
+        }
+    }
+}
+
+fn draw(target: &mut ZBufferedTarget, vew: &Triangle, nrm: &Triangle, tex: &Triangle, difpixels: &[u8], difsize: (u32, u32)) {
     let xmin = vew.a.x.min(vew.b.x).min(vew.c.x) as isize;
     let ymin = vew.a.y.min(vew.b.y).min(vew.c.y) as isize;
     let xmax = vew.a.x.max(vew.b.x).max(vew.c.x) as isize + 1;
@@ -34,8 +54,7 @@ fn draw(yres: u32, pixel: &mut[u8], zbuff: &mut[f32], vew: &Triangle, nrm: &Tria
             if bc.x >= 0.0 && bc.y >= 0.0 && bc.z >= 0.0 {
                 // Barycenter above is upwards. Everything below rotated 90 degrees to accomodate sideways renderer.
                 let z = bc.x * vew.b.z + bc.y * vew.c.z + bc.z * vew.a.z;
-                let zb = &mut zbuff[y as usize + x as usize * yres as usize];
-                if z > *zb {
+                target.draw(x, y, z, || {
                     let light = Vertex { x: 0.0, y: 0.0, z: 1.0 };
                     let varying = Vertex { x: light.dot(&nrm.b), y: light.dot(&nrm.c), z: light.dot(&nrm.a) };
                     let xx = ((difwidth - 1) as f32 * (0.0 + (bc.x * tex.b.x + bc.y * tex.c.x + bc.z * tex.a.x))) as usize;
@@ -43,17 +62,12 @@ fn draw(yres: u32, pixel: &mut[u8], zbuff: &mut[f32], vew: &Triangle, nrm: &Tria
                     let intensity = bc.dot(&varying);
                     let shading = (255.0 * intensity.max(0.0)) as u8;
                     // Image is upwards contrary to sideways renderer.
-                    *zb = z;
                     let offs = (xx + yy * difwidth as usize) * 4;
                     let b = difpixels[offs];
                     let g = difpixels[offs+1];
                     let r = difpixels[offs+2];
-                    let (r, g, b) = pshade(r, g, b, shading);
-                    let output = (y as usize + x as usize * yres as usize) * 4;
-                    pixel[output] = b;
-                    pixel[output + 1] = g;
-                    pixel[output + 2] = r;
-                }
+                    pshade(r, g, b, shading)
+                });
             }
         }
     }
@@ -162,7 +176,12 @@ fn main() {
                     let tri = tri.clone().view_triangle(&x, &y, &z, &eye);
                     let per = tri.perspective();
                     let vew = per.viewport(xres, yres);
-                    draw(yres, pixel, &mut zbuff, &vew, &nrm, &tex, difpixels, difsize);
+                    let mut target = ZBufferedTarget {
+                        yres: yres,
+                        pixel: pixel,
+                        zbuff: &mut zbuff,
+                    };
+                    draw(&mut target, &vew, &nrm, &tex, difpixels, difsize);
                 }
             });
         }).unwrap();
