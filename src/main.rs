@@ -4,47 +4,13 @@ use geom::*;
 mod obj;
 use obj::*;
 mod asciidigits;
+mod mouse;
+mod viewport;
+use viewport::*;
 use std::env;
 use std::f32;
-use std::time::{Instant, Duration};
-use sdl2::EventPump;
 use sdl2::surface::Surface;
-use sdl2::pixels::{PixelFormatEnum, PixelFormat};
-use sdl2::rect::Rect;
-use sdl2::event::{Event, WindowEvent, EventWaitIterator};
-
-fn make_pixel_format(format: PixelFormatEnum) -> PixelFormat {
-    Surface::new(1, 1, format).unwrap().pixel_format()
-}
-
-struct ZBufferedTarget<'a> {
-    yres: u32,
-    pixel: &'a mut[u8],
-    zbuff: &'a mut[f32],
-}
-
-impl<'a> ZBufferedTarget<'a> {
-    fn draw<F: FnOnce() -> (u8, u8, u8)>(&mut self, x: isize, y: isize, z: f32, f: F) {
-        let idx = y as usize + x as usize * self.yres as usize;
-        if self.zbuff[idx] < z {
-            self.zbuff[idx] = z;
-            let (r, g, b) = f();
-            let output = idx * 4;
-            self.pixel[output] = b;
-            self.pixel[output + 1] = g;
-            self.pixel[output + 2] = r;
-        }
-    }
-
-    fn reset(&mut self) {
-        for v in self.pixel.iter_mut() { *v = 0; }
-        for v in self.zbuff.iter_mut() { *v = f32::MIN; }
-    }
-
-    fn xres(&self) -> usize {
-        self.zbuff.len() / self.yres as usize
-    }
-}
+use sdl2::pixels::{PixelFormatEnum};
 
 struct TextureShader<'a> {
     pixels: &'a [u8],
@@ -69,103 +35,22 @@ impl<'a> TextureShader<'a> {
     }
 }
 
-fn draw(target: &mut ZBufferedTarget, vew: &Triangle, nrm: &Triangle, tex: &Triangle, shader: &TextureShader) {
-    let xmin = vew.a.x.min(vew.b.x).min(vew.c.x).max(0.0) as isize;
-    let ymin = vew.a.y.min(vew.b.y).min(vew.c.y).max(0.0) as isize;
-    let xmax = (vew.a.x.max(vew.b.x).max(vew.c.x) as isize + 1).min(target.xres() as isize);
-    let ymax = (vew.a.y.max(vew.b.y).max(vew.c.y) as isize + 1).min(target.yres as isize);
-    if xmin >= xmax || ymin >= ymax {
-        return;
-    }
-    for x in xmin..xmax {
-        for y in ymin..ymax {
-            let bc = vew.clone().barycenter(x, y);
-            if bc.x >= 0.0 && bc.y >= 0.0 && bc.z >= 0.0 {
-                // Barycenter above is upwards. Everything below rotated 90 degrees to accomodate sideways renderer.
-                let z = bc.x * vew.b.z + bc.y * vew.c.z + bc.z * vew.a.z;
-                target.draw(x, y, z, || {
-                    let light = Vertex { x: 0.0, y: 0.0, z: 1.0 };
-                    let varying = Vertex { x: light.dot(&nrm.b), y: light.dot(&nrm.c), z: light.dot(&nrm.a) };
-                    let xx = 0.0 + (bc.x * tex.b.x + bc.y * tex.c.x + bc.z * tex.a.x);
-                    let yy = 1.0 - (bc.x * tex.b.y + bc.y * tex.c.y + bc.z * tex.a.y);
-                    let intensity = bc.dot(&varying);
-                    shader.shade(xx, yy, intensity)
-                });
-            }
+fn draw_shaded_triangle(target: &mut Viewport, vew: &Triangle, nrm: &Triangle, tex: &Triangle, shader: &TextureShader) {
+    target.draw_triangle(vew, |target, x, y| {
+        let bc = vew.clone().barycenter(x, y);
+        if bc.x >= 0.0 && bc.y >= 0.0 && bc.z >= 0.0 {
+            // Barycenter above is upwards. Everything below rotated 90 degrees to accomodate sideways renderer.
+            let z = bc.x * vew.b.z + bc.y * vew.c.z + bc.z * vew.a.z;
+            target.draw(x, y, z, || {
+                let light = Vertex { x: 0.0, y: 0.0, z: 1.0 };
+                let varying = Vertex { x: light.dot(&nrm.b), y: light.dot(&nrm.c), z: light.dot(&nrm.a) };
+                let xx = 0.0 + (bc.x * tex.b.x + bc.y * tex.c.x + bc.z * tex.a.x);
+                let yy = 1.0 - (bc.x * tex.b.y + bc.y * tex.c.y + bc.z * tex.a.y);
+                let intensity = bc.dot(&varying);
+                shader.shade(xx, yy, intensity)
+            });
         }
-    }
-}
-
-struct MouseIterator<'a> {
-    inner: EventWaitIterator<'a>,
-    x: f32,
-    y: f32,
-    sens: f32,
-}
-
-impl<'a> Iterator for MouseIterator<'a> {
-    type Item = (f32, f32);
-
-    fn next(&mut self) -> Option<(f32, f32)> {
-        loop {
-            let event = match self.inner.next() {
-                None => return None,
-                Some(e) => e,
-            };
-            match event {
-                Event::Quit { timestamp: _ } => return None,
-                Event::Window { timestamp: _, window_id: _, win_event: WindowEvent::Exposed } =>
-                    break,
-                Event::Window { timestamp: _, window_id: _, win_event: WindowEvent::Close } =>
-                    return None,
-                Event::MouseMotion {
-                    timestamp: _, window_id: _, which: _, mousestate: _, x: _, y: _, xrel, yrel,
-                } => {
-                    self.x -= self.sens * xrel as f32;
-                    self.y += self.sens * yrel as f32;
-                    break;
-                },
-                _ => (),
-            };
-        }
-        Some((self.x, self.y))
-    }
-}
-
-fn mouse_iter(pump: &mut EventPump) -> MouseIterator {
-    MouseIterator {
-        inner: pump.wait_iter(),
-        x: 0.0,
-        y: 0.0,
-        sens: 0.005,
-    }
-}
-
-struct SumWindow {
-    history: Vec<Duration>,
-    idx: usize,
-    sum: Duration,
-}
-
-impl SumWindow {
-    fn new(window_size: usize) -> Self {
-        let mut history = Vec::new();
-        history.resize(window_size, Duration::new(0, 0));
-        SumWindow {
-            history: history,
-            idx: 0,
-            sum: Duration::new(0, 0),
-        }
-    }
-
-    fn tick(&mut self, d: Duration) -> f64 {
-        self.sum += d;
-        self.sum -= self.history[self.idx];
-        self.history[self.idx] = d;
-        self.idx = if self.idx + 1 == self.history.len() { 0 } else { self.idx + 1 };
-        let elapsed = self.sum.as_secs() as f64 + self.sum.subsec_nanos() as f64 * 1e-9;
-        self.history.len() as f64 / elapsed
-    }
+    });
 }
 
 fn main() {
@@ -197,67 +82,25 @@ fn main() {
     let vertices = obj.tvgen();
     let textures = obj.ttgen();
     let normals = obj.tngen();
+
     let xres: u32 = 800;
     let yres: u32 = 600;
 
-    let sdl = sdl2::init().unwrap();
-    let video = sdl.video().unwrap();
-    let window = video.window(&model, xres, yres).build().unwrap();
-    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
-    let renderer = canvas.texture_creator();
-    // Notice the flip between xres and yres - the renderer is on its side to maximize cache effeciency.
-    let mut texture = renderer.create_texture_streaming(PixelFormatEnum::ARGB8888, yres, xres).unwrap();
-
-    let mut zbuff = Vec::new();
-    zbuff.resize((xres * yres) as usize, 0f32);
-    sdl.mouse().set_relative_mouse_mode(false);
-    let mut times = SumWindow::new(30);
-    for (xt, yt) in mouse_iter(&mut sdl.event_pump().unwrap()) {
-        texture.with_lock(None, |pixel, _pitch| {
-            dif.with_lock(|difpixels| {
-                let t = Instant::now();
-                let mut target = ZBufferedTarget {
-                    yres: yres,
-                    pixel: pixel,
-                    zbuff: &mut zbuff,
-                };
-                let shader = TextureShader {
-                    pixels: difpixels,
-                    width: dif.width(),
-                    height: dif.height(),
-                };
-                target.reset();
-                // Mouse rotates:
-                let eye = Vertex { x: xt.sin(), y: yt.sin(), z: xt.cos() };
-                let eye_dir = &eye;
-                // Mouse translates:
-                //let eye = Vertex { x: xt, y: yt, z: 1.0 };
-                //let eye_dir = Vertex { x: 0.0, y: 0.0, z: 1.0 };
-                let z = (eye_dir.clone() - Vertex::center()).unit();
-                let x = (Vertex::upward().cross(z.clone())).unit();
-                let y = z.clone().cross(x.clone());
-                for ((nrm, tex), tri) in normals.iter().zip(textures.iter()).zip(vertices.iter()) {
-                    let nrm = nrm.clone().view_normal(&x, &y, &z).unit();
-                    let tri = tri.clone().view_triangle(&x, &y, &z, &eye);
-                    let per = tri.perspective();
-                    let vew = per.viewport(xres, yres);
-                    draw(&mut target, &vew, &nrm, &tex, &shader);
-                }
-                let fps = times.tick(t.elapsed());
-                for (i, d) in format!("{}", fps as usize).chars().enumerate() {
-                    asciidigits::draw(d as usize - '0' as usize, |y, x| {
-                        let o = (x+i*6)*yres as usize + (yres as usize - 1 - y);
-                        target.pixel[4*o] = 255;
-                        target.pixel[4*o+1] = 255;
-                        target.pixel[4*o+2] = 255;
-                    });
-                }
-            })
-        }).unwrap();
-        let dst = Rect::new((xres as i32 - yres as i32) / 2,
-                            (yres as i32 - xres as i32) / 2,
-                            yres, xres);
-        canvas.copy_ex(&texture, None, dst, -90f64, None, false, false).unwrap();
-        canvas.present();
-    }
+    render_loop(&model, xres, yres, |viewport: &mut Viewport| {
+        dif.with_lock(|difpixels| {
+            let shader = TextureShader {
+                pixels: difpixels,
+                width: dif.width(),
+                height: dif.height(),
+            };
+            for ((nrm, tex), tri) in normals.iter().zip(textures.iter()).zip(vertices.iter()) {
+                let nrm = nrm.clone().view_normal(&viewport.x(), &viewport.y(), &viewport.z()).unit();
+                let tri = tri.clone().view_triangle(&viewport.x(), &viewport.y(), &viewport.z(), &viewport.eye());
+                let per = tri.perspective();
+                let vew = per.viewport(xres, yres);
+                draw_shaded_triangle(viewport, &vew, &nrm, &tex, &shader);
+            }
+            None as Option<()>
+        })
+    });
 }
