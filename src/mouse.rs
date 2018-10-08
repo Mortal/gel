@@ -1,18 +1,15 @@
 use sdl2::EventPump;
-use sdl2::event::{Event, WindowEvent, EventWaitIterator};
+use sdl2::event::{Event, WindowEvent};
 use super::geom::Vertex;
 
-pub struct RawMouseIterator<'a>(EventWaitIterator<'a>);
+pub struct RawMouseIterator<'a>(&'a mut EventPump);
 
 impl<'a> Iterator for RawMouseIterator<'a> {
     type Item = (f32, f32);
 
     fn next(&mut self) -> Option<(f32, f32)> {
         loop {
-            let event = match self.0.next() {
-                None => return None,
-                Some(e) => e,
-            };
+            let event = self.0.wait_event();
             match event {
                 Event::Quit { timestamp: _ } => return None,
                 Event::Window { timestamp: _, window_id: _, win_event: WindowEvent::Exposed } =>
@@ -29,7 +26,7 @@ impl<'a> Iterator for RawMouseIterator<'a> {
 }
 
 pub fn mouse_iter(pump: &mut EventPump) -> RawMouseIterator {
-    RawMouseIterator(pump.wait_iter())
+    RawMouseIterator(pump)
 }
 
 pub struct MouseCameraIterator<'a> {
