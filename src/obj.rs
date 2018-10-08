@@ -87,8 +87,11 @@ impl Obj {
                 let (_, x, y, z) = scan!(line, ' ', String, f32, f32, f32).expect(&line);
                 let v = Vertex { x: x, y: y, z: z };
                 vsv.push(v);
+            } else if line.starts_with("mtllib ") || line.starts_with("g ") || line.starts_with("usemtl ") || line.starts_with("s ") || line.starts_with("o ") {
+                continue;
             } else {
-                return Err(Error::Scan(format!("Unexpected line {:?}", line)));
+                println!("Unexpected line {:?}", line);
+                continue;
             }
         }
         Ok(Obj {
