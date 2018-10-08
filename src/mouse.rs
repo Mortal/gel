@@ -4,23 +4,37 @@ use super::geom::Vertex;
 
 pub struct RawMouseIterator<'a>(&'a mut EventPump);
 
+fn event_xy(event: Event) -> Option<(f32, f32)> {
+    match event {
+        Event::Quit { timestamp: _ } => None,
+        Event::Window { timestamp: _, window_id: _, win_event: WindowEvent::Close } => None,
+        Event::MouseMotion {
+            timestamp: _, window_id: _, which: _, mousestate: _, x: _, y: _, xrel, yrel,
+        } => Some((xrel as f32, yrel as f32)),
+        _ => Some((0.0, 0.0)),
+    }
+}
+
 impl<'a> Iterator for RawMouseIterator<'a> {
     type Item = (f32, f32);
 
     fn next(&mut self) -> Option<(f32, f32)> {
         loop {
-            let event = self.0.wait_event();
-            match event {
-                Event::Quit { timestamp: _ } => return None,
-                Event::Window { timestamp: _, window_id: _, win_event: WindowEvent::Exposed } =>
-                    return Some((0.0, 0.0)),
-                Event::Window { timestamp: _, window_id: _, win_event: WindowEvent::Close } =>
-                    return None,
-                Event::MouseMotion {
-                    timestamp: _, window_id: _, which: _, mousestate: _, x: _, y: _, xrel, yrel,
-                } => return Some((xrel as f32, yrel as f32)),
-                _ => (),
+            let first_event = self.0.poll_event().unwrap_or_else(|| self.0.wait_event());
+            let (mut xrel, mut yrel) = match event_xy(first_event) {
+                None => return None,
+                Some((x, y)) => (x, y)
             };
+            for event in self.0.poll_iter() {
+                match event_xy(event) {
+                    None => return None,
+                    Some((x, y)) => {
+                        xrel += x;
+                        yrel += y;
+                    },
+                };
+            }
+            return Some((xrel, yrel));
         }
     }
 }
