@@ -12,25 +12,35 @@ pub struct ZBufferedTarget<'a> {
 }
 
 impl<'a> ZBufferedTarget<'a> {
-    pub fn new_column_major(xres: usize, yres: usize, pixel: &'a mut [u8], zbuff: &'a mut [f32]) -> Self {
+    pub fn new_column_major(
+        xres: usize,
+        yres: usize,
+        pixel: &'a mut [u8],
+        zbuff: &'a mut [f32],
+    ) -> Self {
         Self {
             xres,
             yres,
             xstride: yres,
             ystride: 1,
             pixel,
-            zbuff
+            zbuff,
         }
     }
 
-    pub fn new_row_major(xres: usize, yres: usize, pixel: &'a mut [u8], zbuff: &'a mut [f32]) -> Self {
+    pub fn new_row_major(
+        xres: usize,
+        yres: usize,
+        pixel: &'a mut [u8],
+        zbuff: &'a mut [f32],
+    ) -> Self {
         Self {
             xres,
             yres,
             xstride: 1,
             ystride: xres,
             pixel,
-            zbuff
+            zbuff,
         }
     }
 

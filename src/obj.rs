@@ -1,10 +1,10 @@
+use super::{draw_shaded_triangle, Pixels, TextureShader, Viewport};
 use geom::*;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::result;
-use super::{Viewport, TextureShader, Pixels, draw_shaded_triangle};
 
 #[derive(Debug)]
 pub enum Error {
@@ -161,33 +161,27 @@ impl Obj {
 
     pub fn draw_shaded<P: Pixels>(&self, viewport: &mut Viewport, shader: &TextureShader<P>) {
         let scale = self.vsv.iter().map(|v| v.len()).fold(0.0, f32::max);
-        let vertices = self.fs
-            .iter()
-            .map(|f| {
-                Triangle::new(
-                    self.vsv[f.va].clone(),
-                    self.vsv[f.vb].clone(),
-                    self.vsv[f.vc].clone(),
-                ) * (1f32 / scale)
-            });
-        let normals = self.fs
-            .iter()
-            .map(|f| {
-                Triangle::new(
-                    self.vsn[f.na].clone(),
-                    self.vsn[f.nb].clone(),
-                    self.vsn[f.nc].clone(),
-                )
-            });
-        let textures = self.fs
-            .iter()
-            .map(|f| {
-                Triangle::new(
-                    self.vst[f.ta].clone(),
-                    self.vst[f.tb].clone(),
-                    self.vst[f.tc].clone(),
-                )
-            });
+        let vertices = self.fs.iter().map(|f| {
+            Triangle::new(
+                self.vsv[f.va].clone(),
+                self.vsv[f.vb].clone(),
+                self.vsv[f.vc].clone(),
+            ) * (1f32 / scale)
+        });
+        let normals = self.fs.iter().map(|f| {
+            Triangle::new(
+                self.vsn[f.na].clone(),
+                self.vsn[f.nb].clone(),
+                self.vsn[f.nc].clone(),
+            )
+        });
+        let textures = self.fs.iter().map(|f| {
+            Triangle::new(
+                self.vst[f.ta].clone(),
+                self.vst[f.tb].clone(),
+                self.vst[f.tc].clone(),
+            )
+        });
         for ((nrm, tex), tri) in normals.zip(textures).zip(vertices) {
             let nrm = nrm.clone()
                 .view_normal(&viewport.x(), &viewport.y(), &viewport.z())
