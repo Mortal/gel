@@ -1,15 +1,26 @@
-use sdl2::EventPump;
+use gel::Vertex;
 use sdl2::event::{Event, WindowEvent};
-use super::geom::Vertex;
+use sdl2::EventPump;
 
 pub struct RawMouseIterator<'a>(&'a mut EventPump);
 
 fn event_xy(event: Event) -> Option<(f32, f32)> {
     match event {
         Event::Quit { timestamp: _ } => None,
-        Event::Window { timestamp: _, window_id: _, win_event: WindowEvent::Close } => None,
+        Event::Window {
+            timestamp: _,
+            window_id: _,
+            win_event: WindowEvent::Close,
+        } => None,
         Event::MouseMotion {
-            timestamp: _, window_id: _, which: _, mousestate: _, x: _, y: _, xrel, yrel,
+            timestamp: _,
+            window_id: _,
+            which: _,
+            mousestate: _,
+            x: _,
+            y: _,
+            xrel,
+            yrel,
         } => Some((xrel as f32, yrel as f32)),
         _ => Some((0.0, 0.0)),
     }
@@ -23,7 +34,7 @@ impl<'a> Iterator for RawMouseIterator<'a> {
             let first_event = self.0.poll_event().unwrap_or_else(|| self.0.wait_event());
             let (mut xrel, mut yrel) = match event_xy(first_event) {
                 None => return None,
-                Some((x, y)) => (x, y)
+                Some((x, y)) => (x, y),
             };
             for event in self.0.poll_iter() {
                 match event_xy(event) {
@@ -31,7 +42,7 @@ impl<'a> Iterator for RawMouseIterator<'a> {
                     Some((x, y)) => {
                         xrel += x;
                         yrel += y;
-                    },
+                    }
                 };
             }
             return Some((xrel, yrel));
@@ -58,7 +69,11 @@ impl<'a> Iterator for MouseCameraIterator<'a> {
             self.x -= self.sens * xrel;
             self.y += self.sens * yrel;
             // Mouse rotates:
-            let eye = Vertex { x: self.x.sin(), y: self.y.sin(), z: self.x.cos() };
+            let eye = Vertex {
+                x: self.x.sin(),
+                y: self.y.sin(),
+                z: self.x.cos(),
+            };
             let eye_dir = eye.clone();
             // Mouse translates:
             //let eye = Vertex { x: self.x, y: self.y, z: 1.0 };

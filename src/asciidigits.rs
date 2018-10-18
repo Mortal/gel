@@ -1,4 +1,5 @@
-pub const DIGITS: [[u8; 35]; 10] = [*b"\
+pub const DIGITS: [[u8; 35]; 10] = [
+    *b"\
 xxxxx\
 x...x\
 x...x\
@@ -6,7 +7,8 @@ x...x\
 x...x\
 x...x\
 xxxxx\
-", *b"\
+",
+    *b"\
 ....x\
 ....x\
 ....x\
@@ -14,7 +16,8 @@ xxxxx\
 ....x\
 ....x\
 ....x\
-", *b"\
+",
+    *b"\
 xxxxx\
 ....x\
 ....x\
@@ -22,7 +25,8 @@ xxxxx\
 x....\
 x....\
 xxxxx\
-", *b"\
+",
+    *b"\
 xxxxx\
 ....x\
 ....x\
@@ -30,7 +34,8 @@ xxxxx\
 ....x\
 ....x\
 xxxxx\
-", *b"\
+",
+    *b"\
 x...x\
 x...x\
 x...x\
@@ -38,7 +43,8 @@ xxxxx\
 ....x\
 ....x\
 ....x\
-", *b"\
+",
+    *b"\
 xxxxx\
 x....\
 x....\
@@ -46,7 +52,8 @@ xxxxx\
 ....x\
 ....x\
 xxxxx\
-", *b"\
+",
+    *b"\
 xxxxx\
 x....\
 x....\
@@ -54,7 +61,8 @@ xxxxx\
 x...x\
 x...x\
 xxxxx\
-", *b"\
+",
+    *b"\
 xxxxx\
 ....x\
 ....x\
@@ -62,34 +70,37 @@ xxxxx\
 ....x\
 ....x\
 ....x\
-", *b"\
-xxxxx\
-x...x\
-x...x\
-xxxxx\
-x...x\
-x...x\
-xxxxx\
-", *b"\
+",
+    *b"\
 xxxxx\
 x...x\
 x...x\
 xxxxx\
+x...x\
+x...x\
+xxxxx\
+",
+    *b"\
+xxxxx\
+x...x\
+x...x\
+xxxxx\
 ....x\
 ....x\
 xxxxx\
-"];
+",
+];
 
 macro_rules! draw {
-    ( $digit:expr, $cb:expr ) => {
+    ($digit:expr, $cb:expr) => {
         for i in 0..7 {
             for j in 0..5 {
-                if DIGITS[$digit][i*5+j] == b'x' {
+                if DIGITS[$digit][i * 5 + j] == b'x' {
                     $cb(i, j);
                 }
             }
         }
-    }
+    };
 }
 
 pub fn draw<F: FnMut(usize, usize)>(digit: usize, mut f: F) {

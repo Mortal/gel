@@ -1,4 +1,4 @@
-use std::ops::{Sub, Mul};
+use std::ops::{Mul, Sub};
 
 #[derive(Debug, Clone)]
 pub struct Vertex {
@@ -9,15 +9,23 @@ pub struct Vertex {
 
 impl Vertex {
     pub fn center() -> Self {
-        Vertex { x: 0.0, y: 0.0, z: 0.0 }
+        Vertex {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 
     pub fn upward() -> Self {
-        Vertex { x: 0.0, y: 1.0, z: 0.0 }
+        Vertex {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        }
     }
 
     pub fn len(&self) -> f32 {
-        (self.x*self.x + self.y*self.y + self.z*self.z).sqrt()
+        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
     }
 
     pub fn unit(self) -> Self {
@@ -95,11 +103,7 @@ pub struct Triangle {
 
 impl Triangle {
     pub fn new(a: Vertex, b: Vertex, c: Vertex) -> Triangle {
-        Triangle {
-            a: a,
-            b: b,
-            c: c,
-        }
+        Triangle { a: a, b: b, c: c }
     }
 
     pub fn unit(self) -> Triangle {
@@ -143,14 +147,30 @@ impl Triangle {
         let x = xres as f32 / 2.0;
         let y = yres as f32 / 4.0;
         Triangle {
-            a: Vertex { x: w * self.a.x + x, y: h * self.a.y + y, z: (self.a.z + 1.0) / 1.5 },
-            b: Vertex { x: w * self.b.x + x, y: h * self.b.y + y, z: (self.b.z + 1.0) / 1.5 },
-            c: Vertex { x: w * self.c.x + x, y: h * self.c.y + y, z: (self.c.z + 1.0) / 1.5 },
+            a: Vertex {
+                x: w * self.a.x + x,
+                y: h * self.a.y + y,
+                z: (self.a.z + 1.0) / 1.5,
+            },
+            b: Vertex {
+                x: w * self.b.x + x,
+                y: h * self.b.y + y,
+                z: (self.b.z + 1.0) / 1.5,
+            },
+            c: Vertex {
+                x: w * self.c.x + x,
+                y: h * self.c.y + y,
+                z: (self.c.z + 1.0) / 1.5,
+            },
         }
     }
 
     pub fn barycenter(self, x: isize, y: isize) -> Vertex {
-        let p = Vertex { x: x as f32, y: y as f32, z: 0.0 };
+        let p = Vertex {
+            x: x as f32,
+            y: y as f32,
+            z: 0.0,
+        };
         let v0 = self.b.clone() - self.a.clone();
         let v1 = self.c.clone() - self.a.clone();
         let v2 = p - self.a.clone();

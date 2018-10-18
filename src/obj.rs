@@ -1,9 +1,10 @@
-use std::fmt;
-use std::io::{self, BufRead, BufReader};
-use std::result;
-use std::fs::File;
-use std::path::Path;
 use geom::*;
+use std::fmt;
+use std::fs::File;
+use std::io::{self, BufRead, BufReader};
+use std::path::Path;
+use std::result;
+use super::{Viewport, TextureShader, Pixels, draw_shaded_triangle};
 
 #[derive(Debug)]
 pub enum Error {
@@ -66,14 +67,21 @@ impl Obj {
                 continue;
             }
             if line.starts_with("f ") {
-                let (_, sx, sy, sz) = scan!(line, ' ', String, String, String, String).expect(&line);
+                let (_, sx, sy, sz) =
+                    scan!(line, ' ', String, String, String, String).expect(&line);
                 let (va, ta, na) = scan!(sx, '/', usize, usize, usize)?;
                 let (vb, tb, nb) = scan!(sy, '/', usize, usize, usize)?;
                 let (vc, tc, nc) = scan!(sz, '/', usize, usize, usize)?;
                 fs.push(Face {
-                    va: va-1, vb: vb-1, vc: vc-1,
-                    ta: ta-1, tb: tb-1, tc: tc-1,
-                    na: na-1, nb: nb-1, nc: nc-1,
+                    va: va - 1,
+                    vb: vb - 1,
+                    vc: vc - 1,
+                    ta: ta - 1,
+                    tb: tb - 1,
+                    tc: tc - 1,
+                    na: na - 1,
+                    nb: nb - 1,
+                    nc: nc - 1,
                 });
             } else if line.starts_with("vn ") {
                 let (_, x, y, z) = scan!(line, ' ', String, f32, f32, f32).expect(&line);
@@ -81,13 +89,22 @@ impl Obj {
                 vsn.push(v);
             } else if line.starts_with("vt ") {
                 let (_, x, y) = scan!(line, ' ', String, f32, f32).expect(&line);
-                let v = Vertex { x: x, y: y, z: 0f32 };
+                let v = Vertex {
+                    x: x,
+                    y: y,
+                    z: 0f32,
+                };
                 vst.push(v);
             } else if line.starts_with("v ") {
                 let (_, x, y, z) = scan!(line, ' ', String, f32, f32, f32).expect(&line);
                 let v = Vertex { x: x, y: y, z: z };
                 vsv.push(v);
-            } else if line.starts_with("mtllib ") || line.starts_with("g ") || line.starts_with("usemtl ") || line.starts_with("s ") || line.starts_with("o ") {
+            } else if line.starts_with("mtllib ")
+                || line.starts_with("g ")
+                || line.starts_with("usemtl ")
+                || line.starts_with("s ")
+                || line.starts_with("o ")
+            {
                 continue;
             } else {
                 println!("Unexpected line {:?}", line);
@@ -104,23 +121,86 @@ impl Obj {
 
     pub fn tvgen(&self) -> Vec<Triangle> {
         let scale = self.vsv.iter().map(|v| v.len()).fold(0.0, f32::max);
-        self.fs.iter().map(
-            |f| Triangle::new(self.vsv[f.va].clone(),
-                              self.vsv[f.vb].clone(),
-                              self.vsv[f.vc].clone()) * (1f32 / scale)).collect()
+        self.fs
+            .iter()
+            .map(|f| {
+                Triangle::new(
+                    self.vsv[f.va].clone(),
+                    self.vsv[f.vb].clone(),
+                    self.vsv[f.vc].clone(),
+                ) * (1f32 / scale)
+            })
+            .collect()
     }
 
     pub fn tngen(&self) -> Vec<Triangle> {
-        self.fs.iter().map(
-            |f| Triangle::new(self.vsn[f.na].clone(),
-                              self.vsn[f.nb].clone(),
-                              self.vsn[f.nc].clone())).collect()
+        self.fs
+            .iter()
+            .map(|f| {
+                Triangle::new(
+                    self.vsn[f.na].clone(),
+                    self.vsn[f.nb].clone(),
+                    self.vsn[f.nc].clone(),
+                )
+            })
+            .collect()
     }
 
     pub fn ttgen(&self) -> Vec<Triangle> {
-        self.fs.iter().map(
-            |f| Triangle::new(self.vst[f.ta].clone(),
-                              self.vst[f.tb].clone(),
-                              self.vst[f.tc].clone())).collect()
+        self.fs
+            .iter()
+            .map(|f| {
+                Triangle::new(
+                    self.vst[f.ta].clone(),
+                    self.vst[f.tb].clone(),
+                    self.vst[f.tc].clone(),
+                )
+            })
+            .collect()
+    }
+
+    pub fn draw_shaded<P: Pixels>(&self, viewport: &mut Viewport, shader: &TextureShader<P>) {
+        let scale = self.vsv.iter().map(|v| v.len()).fold(0.0, f32::max);
+        let vertices = self.fs
+            .iter()
+            .map(|f| {
+                Triangle::new(
+                    self.vsv[f.va].clone(),
+                    self.vsv[f.vb].clone(),
+                    self.vsv[f.vc].clone(),
+                ) * (1f32 / scale)
+            });
+        let normals = self.fs
+            .iter()
+            .map(|f| {
+                Triangle::new(
+                    self.vsn[f.na].clone(),
+                    self.vsn[f.nb].clone(),
+                    self.vsn[f.nc].clone(),
+                )
+            });
+        let textures = self.fs
+            .iter()
+            .map(|f| {
+                Triangle::new(
+                    self.vst[f.ta].clone(),
+                    self.vst[f.tb].clone(),
+                    self.vst[f.tc].clone(),
+                )
+            });
+        for ((nrm, tex), tri) in normals.zip(textures).zip(vertices) {
+            let nrm = nrm.clone()
+                .view_normal(&viewport.x(), &viewport.y(), &viewport.z())
+                .unit();
+            let tri = tri.clone().view_triangle(
+                &viewport.x(),
+                &viewport.y(),
+                &viewport.z(),
+                &viewport.eye(),
+            );
+            let per = tri.perspective();
+            let vew = per.viewport(viewport.xres() as u32, viewport.yres() as u32);
+            draw_shaded_triangle(viewport, &vew, &nrm, &tex, &shader);
+        }
     }
 }
